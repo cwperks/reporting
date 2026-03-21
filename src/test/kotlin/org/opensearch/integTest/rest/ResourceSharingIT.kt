@@ -704,4 +704,154 @@ class ResourceSharingIT : PluginRestTestCase() {
     fun `test legacy list report instances with resource sharing`() {
         testListReportInstancesWithResourceSharing(LEGACY_BASE_REPORTS_URI)
     }
+
+    /**
+     * Test that a user with access to a report definition (parent) can list and get its
+     * report instances (children) via parent-inherited access, without being directly
+     * shared on the instances themselves.
+     *
+     * This mirrors the dashboards UI scenario where instances are shown on page load
+     * for a definition the user has access to.
+     */
+    private fun testListInstancesViaParentDefinitionAccess(baseUri: String) {
+        if (!isHttps()) return
+        if (!isResourceSharingFeatureEnabled()) return
+
+        // Create a report definition as the full-access user (owner)
+        val defRequest = constructReportDefinitionRequest(name = "parent_hierarchy_def")
+        val defResponse = executeRequest(
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/definition",
+            defRequest,
+            RestStatus.OK.status
+        )
+        val reportDefinitionId = defResponse.get("reportDefinitionId").asString
+        waitForSharingVisibility(
+            RestRequest.Method.GET.name,
+            "$baseUri/definition/$reportDefinitionId",
+            null,
+            reportsFullClient
+        )
+
+        // Generate two instances from that definition
+        val instance1Response = executeRequest(
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/on_demand/$reportDefinitionId",
+            "{}",
+            RestStatus.OK.status
+        )
+        val instance1Id = instance1Response.get("reportInstance").asJsonObject.get("id").asString
+
+        val instance2Response = executeRequest(
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/on_demand/$reportDefinitionId",
+            "{}",
+            RestStatus.OK.status
+        )
+        val instance2Id = instance2Response.get("reportInstance").asJsonObject.get("id").asString
+
+        // Wait for sharing records to be visible for the owner
+        waitForSharingVisibility(
+            RestRequest.Method.GET.name,
+            "$baseUri/instance/$instance1Id",
+            null,
+            reportsFullClient
+        )
+        waitForSharingVisibility(
+            RestRequest.Method.GET.name,
+            "$baseUri/instance/$instance2Id",
+            null,
+            reportsFullClient
+        )
+
+        // Read user has no access yet — instances should be invisible
+        val readListBefore = executeRequest(
+            reportsReadClient,
+            RestRequest.Method.GET.name,
+            "$baseUri/instances",
+            "",
+            RestStatus.OK.status
+        )
+        assertEquals(0, readListBefore.get("totalHits").asInt)
+
+        val readGetBefore = executeRequest(
+            reportsReadClient,
+            RestRequest.Method.GET.name,
+            "$baseUri/instance/$instance1Id",
+            "",
+            RestStatus.FORBIDDEN.status
+        )
+        validateErrorResponse(readGetBefore, RestStatus.FORBIDDEN.status, "security_exception")
+
+        // Share the DEFINITION (parent) with the read user — NOT the instances directly
+        val shareDefPayload = shareWithUserPayload(
+            reportDefinitionId,
+            Utils.REPORT_DEFINITION_TYPE,
+            reportReadOnlyAccessLevel,
+            reportReadUser
+        )
+        shareConfig(reportsFullClient, shareDefPayload)
+
+        // Wait for parent-inherited access to propagate to the instances
+        waitForSharingVisibility(
+            RestRequest.Method.GET.name,
+            "$baseUri/instance/$instance1Id",
+            null,
+            reportsReadClient
+        )
+
+        // Read user should now see both instances via parent-inherited access
+        val readListAfter = executeRequest(
+            reportsReadClient,
+            RestRequest.Method.GET.name,
+            "$baseUri/instances",
+            "",
+            RestStatus.OK.status
+        )
+        assertEquals(2, readListAfter.get("totalHits").asInt)
+        val instanceIds = readListAfter.get("reportInstanceList").asJsonArray
+            .map { it.asJsonObject.get("id").asString }
+            .toSet()
+        assertTrue(instanceIds.contains(instance1Id))
+        assertTrue(instanceIds.contains(instance2Id))
+
+        // Read user should also be able to GET each instance individually
+        val readGet1 = executeRequest(
+            reportsReadClient,
+            RestRequest.Method.GET.name,
+            "$baseUri/instance/$instance1Id",
+            "",
+            RestStatus.OK.status
+        )
+        assertEquals(instance1Id, readGet1.get("reportInstance").asJsonObject.get("id").asString)
+
+        val readGet2 = executeRequest(
+            reportsReadClient,
+            RestRequest.Method.GET.name,
+            "$baseUri/instance/$instance2Id",
+            "",
+            RestStatus.OK.status
+        )
+        assertEquals(instance2Id, readGet2.get("reportInstance").asJsonObject.get("id").asString)
+
+        // Cleanup
+        executeRequest(
+            reportsFullClient,
+            RestRequest.Method.DELETE.name,
+            "$baseUri/definition/$reportDefinitionId",
+            "",
+            RestStatus.OK.status
+        )
+    }
+
+    fun `test list instances via parent definition access`() {
+        testListInstancesViaParentDefinitionAccess(BASE_REPORTS_URI)
+    }
+
+    fun `test legacy list instances via parent definition access`() {
+        testListInstancesViaParentDefinitionAccess(LEGACY_BASE_REPORTS_URI)
+    }
 }
