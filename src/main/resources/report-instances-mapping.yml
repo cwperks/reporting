@@ -22,7 +22,10 @@ properties:
     type: keyword
   status:
     type: keyword
-  reportDefinitionDetails.id:
-    type: keyword
+  reportDefinitionDetails:
+    type: object
+    properties:
+      id:
+        type: keyword
   all_shared_principals:
     type: keyword

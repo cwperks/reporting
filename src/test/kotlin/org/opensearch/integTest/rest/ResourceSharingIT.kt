@@ -76,6 +76,52 @@ class ResourceSharingIT : PluginRestTestCase() {
         }
     }
 
+    /**
+     * Dumps the full contents of the definition index, instance index, and both sharing indices
+     * to the log using the super-admin client. Call this before a failing assertion to diagnose
+     * what state the cluster is actually in.
+     */
+    private fun dumpIndexState(defId: String? = null, instanceIds: List<String> = emptyList()) {
+        val indices = listOf(
+            ".opendistro-reports-definitions",
+            ".opendistro-reports-definitions-sharing",
+            ".opendistro-reports-instances",
+            ".opendistro-reports-instances-sharing"
+        )
+        for (idx in indices) {
+            try {
+                val req = org.opensearch.client.Request("GET", "/$idx/_search")
+                req.setJsonEntity("""{"query":{"match_all":{}},"size":50}""")
+                val resp = adminClient().performRequest(req)
+                val body = resp.entity.content.bufferedReader().readText()
+                log.info("INDEX DUMP [$idx]: $body")
+            } catch (e: Exception) {
+                log.info("INDEX DUMP [$idx]: unavailable (${e.message})")
+            }
+        }
+        // Also dump specific sharing records by ID if provided
+        if (defId != null) {
+            for (sharingIdx in listOf(".opendistro-reports-definitions-sharing", ".opendistro-reports-instances-sharing")) {
+                try {
+                    val req = org.opensearch.client.Request("GET", "/$sharingIdx/_doc/$defId")
+                    val resp = adminClient().performRequest(req)
+                    log.info("SHARING DOC [$sharingIdx/$defId]: ${resp.entity.content.bufferedReader().readText()}")
+                } catch (e: Exception) {
+                    log.info("SHARING DOC [$sharingIdx/$defId]: ${e.message}")
+                }
+            }
+        }
+        for (instanceId in instanceIds) {
+            try {
+                val req = org.opensearch.client.Request("GET", "/.opendistro-reports-instances-sharing/_doc/$instanceId")
+                val resp = adminClient().performRequest(req)
+                log.info("SHARING DOC [instances-sharing/$instanceId]: ${resp.entity.content.bufferedReader().readText()}")
+            } catch (e: Exception) {
+                log.info("SHARING DOC [instances-sharing/$instanceId]: ${e.message}")
+            }
+        }
+    }
+
     // ------------------------------------------------------------------
     // Report definition CRUD
     // ------------------------------------------------------------------
@@ -429,6 +475,7 @@ class ResourceSharingIT : PluginRestTestCase() {
         awaitVisible(baseUri, "definition/$defId", reportsReadClient)
 
         step("assert read user sees both instances via parent-inherited access")
+        dumpIndexState(defId = defId, instanceIds = listOf(instance1Id, instance2Id))
         val readList = executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/instances", "", RestStatus.OK.status)
         assertEquals(2, readList.get("totalHits").asInt)
         val ids = readList.get("reportInstanceList").asJsonArray.map { it.asJsonObject.get("id").asString }.toSet()
