@@ -408,7 +408,15 @@ class ResourceSharingIT : PluginRestTestCase() {
         )
 
         step("share instance with read user")
-        shareConfig(reportsFullClient, shareWithUserPayload(instanceId, Utils.REPORT_INSTANCE_TYPE, reportInstanceReadOnlyAccessLevel, reportReadUser))
+        shareConfig(
+            reportsFullClient,
+            shareWithUserPayload(
+                instanceId,
+                Utils.REPORT_INSTANCE_TYPE,
+                reportInstanceReadOnlyAccessLevel,
+                reportReadUser
+            )
+        )
 
         step("wait for read user to see instance")
         awaitVisible(baseUri, "instance/$instanceId", reportsReadClient)
@@ -474,7 +482,15 @@ class ResourceSharingIT : PluginRestTestCase() {
         )
 
         step("share instance1 with read user")
-        shareConfig(reportsFullClient, shareWithUserPayload(instance1Id, Utils.REPORT_INSTANCE_TYPE, reportInstanceReadOnlyAccessLevel, reportReadUser))
+        shareConfig(
+            reportsFullClient,
+            shareWithUserPayload(
+                instance1Id,
+                Utils.REPORT_INSTANCE_TYPE,
+                reportInstanceReadOnlyAccessLevel,
+                reportReadUser
+            )
+        )
 
         step("wait for read user to see instance1 in list")
         awaitInstanceCount(baseUri, reportsReadClient, 1)

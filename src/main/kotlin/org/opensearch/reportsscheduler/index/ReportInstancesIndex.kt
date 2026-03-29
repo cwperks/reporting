@@ -40,11 +40,13 @@ import java.util.concurrent.TimeUnit
 /**
  * Class for doing ES index operation to maintain report instances in cluster.
  */
+@Suppress("TooManyFunctions")
 internal object ReportInstancesIndex {
     private val log by logger(ReportInstancesIndex::class.java)
     const val REPORT_INSTANCES_INDEX_NAME = ".opendistro-reports-instances"
     private const val REPORT_INSTANCES_MAPPING_FILE_NAME = "report-instances-mapping.yml"
     private const val REPORT_INSTANCES_SETTINGS_FILE_NAME = "report-instances-settings.yml"
+    private const val MAX_SEARCH_RESULTS = 10_000
 
     private lateinit var client: Client
     private lateinit var clusterService: ClusterService
@@ -194,9 +196,12 @@ internal object ReportInstancesIndex {
             }
 
             // Step 4 — fetch full docs for the union, with pagination applied
+            val idsQuery = QueryBuilders.idsQuery().apply {
+                allIds.forEach { addIds(it) }
+            }
             val query = QueryBuilders.boolQuery()
                 .filter(tenantQuery)
-                .filter(QueryBuilders.idsQuery().addIds(*allIds.toTypedArray()))
+                .filter(idsQuery)
             val sourceBuilder = SearchSourceBuilder()
                 .timeout(TimeValue(PluginSettings.operationTimeoutMs, TimeUnit.MILLISECONDS))
                 .sort(UPDATED_TIME_FIELD)
@@ -245,7 +250,7 @@ internal object ReportInstancesIndex {
     private fun searchInstanceIds(query: org.opensearch.index.query.QueryBuilder, pluginClient: PluginClient): Set<String> {
         val sourceBuilder = SearchSourceBuilder()
             .timeout(TimeValue(PluginSettings.operationTimeoutMs, TimeUnit.MILLISECONDS))
-            .size(10_000)
+            .size(MAX_SEARCH_RESULTS)
             .fetchSource(false)
             .query(query)
         val request = SearchRequest().indices(REPORT_INSTANCES_INDEX_NAME).source(sourceBuilder)
@@ -260,7 +265,7 @@ internal object ReportInstancesIndex {
         val query = QueryBuilders.termsQuery(TENANT_FIELD, tenant)
         val sourceBuilder = SearchSourceBuilder()
             .timeout(TimeValue(PluginSettings.operationTimeoutMs, TimeUnit.MILLISECONDS))
-            .size(10_000)
+            .size(MAX_SEARCH_RESULTS)
             .fetchSource(false)
             .query(query)
         val request = SearchRequest()
@@ -282,7 +287,7 @@ internal object ReportInstancesIndex {
             .filter(QueryBuilders.termsQuery("reportDefinitionDetails.id", definitionIds.toList()))
         val sourceBuilder = SearchSourceBuilder()
             .timeout(TimeValue(PluginSettings.operationTimeoutMs, TimeUnit.MILLISECONDS))
-            .size(10_000)
+            .size(MAX_SEARCH_RESULTS)
             .fetchSource(false)
             .query(query)
         val request = SearchRequest().indices(REPORT_INSTANCES_INDEX_NAME).source(sourceBuilder)
