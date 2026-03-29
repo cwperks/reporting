@@ -5,6 +5,7 @@
 
 package org.opensearch.reportsscheduler.index
 
+import org.apache.lucene.search.TotalHits
 import org.opensearch.ResourceAlreadyExistsException
 import org.opensearch.action.DocWriteResponse
 import org.opensearch.action.admin.indices.create.CreateIndexRequest
@@ -28,7 +29,6 @@ import org.opensearch.reportsscheduler.model.RestTag.TENANT_FIELD
 import org.opensearch.reportsscheduler.model.RestTag.UPDATED_TIME_FIELD
 import org.opensearch.reportsscheduler.resources.Utils
 import org.opensearch.reportsscheduler.resources.Utils.shouldUseResourceAuthz
-import org.apache.lucene.search.TotalHits
 import org.opensearch.reportsscheduler.settings.PluginSettings
 import org.opensearch.reportsscheduler.util.PluginClient
 import org.opensearch.reportsscheduler.util.SecureIndexClient

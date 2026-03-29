@@ -5,7 +5,6 @@
 
 package org.opensearch.integTest.rest
 
-import java.time.Duration
 import org.apache.logging.log4j.LogManager
 import org.awaitility.Awaitility
 import org.opensearch.core.rest.RestStatus
@@ -15,6 +14,7 @@ import org.opensearch.integTest.validateErrorResponse
 import org.opensearch.reportsscheduler.ReportsSchedulerPlugin.Companion.BASE_REPORTS_URI
 import org.opensearch.reportsscheduler.resources.Utils
 import org.opensearch.rest.RestRequest
+import java.time.Duration
 
 /**
  * Integration tests for resource sharing feature.
@@ -149,8 +149,11 @@ class ResourceSharingIT : PluginRestTestCase() {
 
     private fun createReportDefinitionAndVerifyOwnerAccess(baseUri: String): String {
         val createResponse = executeRequest(
-            reportsFullClient, RestRequest.Method.POST.name, "$baseUri/definition",
-            constructReportDefinitionRequest(), RestStatus.OK.status
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/definition",
+            constructReportDefinitionRequest(),
+            RestStatus.OK.status
         )
         val id = createResponse.get("reportDefinitionId").asString
         assertNotNull("reportDefinitionId should be generated", id)
@@ -168,11 +171,13 @@ class ResourceSharingIT : PluginRestTestCase() {
     private fun verifyNoAccessWithoutSharing(baseUri: String, id: String) {
         validateErrorResponse(
             executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/definition/$id", "", RestStatus.FORBIDDEN.status),
-            RestStatus.FORBIDDEN.status, "security_exception"
+            RestStatus.FORBIDDEN.status,
+            "security_exception"
         )
         validateErrorResponse(
             executeRequest(reportsNoAccessClient, RestRequest.Method.GET.name, "$baseUri/definition/$id", "", RestStatus.FORBIDDEN.status),
-            RestStatus.FORBIDDEN.status, "security_exception"
+            RestStatus.FORBIDDEN.status,
+            "security_exception"
         )
     }
 
@@ -184,13 +189,20 @@ class ResourceSharingIT : PluginRestTestCase() {
         assertEquals(id, readGet.get("reportDefinitionDetails").asJsonObject.get("id").asString)
 
         validateErrorResponse(
-            executeRequest(reportsReadClient, RestRequest.Method.PUT.name, "$baseUri/definition/$id",
-                constructReportDefinitionRequest(name = "read_user_update_attempt"), RestStatus.FORBIDDEN.status),
-            RestStatus.FORBIDDEN.status, "security_exception"
+            executeRequest(
+                reportsReadClient,
+                RestRequest.Method.PUT.name,
+                "$baseUri/definition/$id",
+                constructReportDefinitionRequest(name = "read_user_update_attempt"),
+                RestStatus.FORBIDDEN.status
+            ),
+            RestStatus.FORBIDDEN.status,
+            "security_exception"
         )
         validateErrorResponse(
             executeRequest(reportsReadClient, RestRequest.Method.DELETE.name, "$baseUri/definition/$id", "", RestStatus.FORBIDDEN.status),
-            RestStatus.FORBIDDEN.status, "security_exception"
+            RestStatus.FORBIDDEN.status,
+            "security_exception"
         )
     }
 
@@ -201,13 +213,20 @@ class ResourceSharingIT : PluginRestTestCase() {
         val noAccessGet = executeRequest(reportsNoAccessClient, RestRequest.Method.GET.name, "$baseUri/definition/$id", "", RestStatus.OK.status)
         assertEquals(id, noAccessGet.get("reportDefinitionDetails").asJsonObject.get("id").asString)
 
-        val update = executeRequest(reportsNoAccessClient, RestRequest.Method.PUT.name, "$baseUri/definition/$id",
-            constructReportDefinitionRequest(name = "no_access_user_updated"), RestStatus.OK.status)
+        val update = executeRequest(
+            reportsNoAccessClient,
+            RestRequest.Method.PUT.name,
+            "$baseUri/definition/$id",
+            constructReportDefinitionRequest(name = "no_access_user_updated"),
+            RestStatus.OK.status
+        )
         assertEquals(id, update.get("reportDefinitionId").asString)
 
         val verify = executeRequest(reportsFullClient, RestRequest.Method.GET.name, "$baseUri/definition/$id", "", RestStatus.OK.status)
-        assertEquals("no_access_user_updated",
-            verify.get("reportDefinitionDetails").asJsonObject.get("reportDefinition").asJsonObject.get("name").asString)
+        assertEquals(
+            "no_access_user_updated",
+            verify.get("reportDefinitionDetails").asJsonObject.get("reportDefinition").asJsonObject.get("name").asString
+        )
     }
 
     private fun cleanupReportDefinition(baseUri: String, id: String) {
@@ -230,8 +249,13 @@ class ResourceSharingIT : PluginRestTestCase() {
 
         step("create 3 definitions")
         fun createDef(name: String): String {
-            val resp = executeRequest(reportsFullClient, RestRequest.Method.POST.name, "$baseUri/definition",
-                constructReportDefinitionRequest(name = name), RestStatus.OK.status)
+            val resp = executeRequest(
+                reportsFullClient,
+                RestRequest.Method.POST.name,
+                "$baseUri/definition",
+                constructReportDefinitionRequest(name = name),
+                RestStatus.OK.status
+            )
             return resp.get("reportDefinitionId").asString.also { log.info("created definition '$name' -> $it") }
         }
         val def1Id = createDef("definition_1")
@@ -242,8 +266,11 @@ class ResourceSharingIT : PluginRestTestCase() {
         awaitDefinitionCount(baseUri, reportsFullClient, 3)
 
         step("verify read user sees 0 before sharing")
-        assertEquals(0, executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/definitions", "", RestStatus.OK.status)
-            .get("totalHits").asInt)
+        assertEquals(
+            0,
+            executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/definitions", "", RestStatus.OK.status)
+                .get("totalHits").asInt
+        )
 
         step("no-access user gets forbidden on list")
         executeRequest(reportsNoAccessClient, RestRequest.Method.GET.name, "$baseUri/definitions", "", RestStatus.FORBIDDEN.status)
@@ -287,8 +314,13 @@ class ResourceSharingIT : PluginRestTestCase() {
         if (!isResourceSharingFeatureEnabled()) return
 
         step("create definition for patch test")
-        val createResponse = executeRequest(reportsFullClient, RestRequest.Method.POST.name, "$baseUri/definition",
-            constructReportDefinitionRequest(name = "patch_test"), RestStatus.OK.status)
+        val createResponse = executeRequest(
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/definition",
+            constructReportDefinitionRequest(name = "patch_test"),
+            RestStatus.OK.status
+        )
         val id = createResponse.get("reportDefinitionId").asString
         log.info("created definition $id")
 
@@ -296,27 +328,34 @@ class ResourceSharingIT : PluginRestTestCase() {
         awaitVisible(baseUri, "definition/$id", reportsFullClient)
 
         step("patch share with read user")
-        patchSharingInfo(reportsFullClient, PatchSharingInfoPayloadBuilder()
-            .configId(id).configType(Utils.REPORT_DEFINITION_TYPE)
-            .apply { share(mutableMapOf(Recipient.USERS to mutableSetOf(reportReadUser)), reportReadOnlyAccessLevel) }
-            .build())
+        patchSharingInfo(
+            reportsFullClient,
+            PatchSharingInfoPayloadBuilder()
+                .configId(id).configType(Utils.REPORT_DEFINITION_TYPE)
+                .apply { share(mutableMapOf(Recipient.USERS to mutableSetOf(reportReadUser)), reportReadOnlyAccessLevel) }
+                .build()
+        )
 
         step("wait for read user to see definition")
         awaitVisible(baseUri, "definition/$id", reportsReadClient)
         assertNotNull(executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/definition/$id", "", RestStatus.OK.status))
 
         step("patch revoke from read user")
-        patchSharingInfo(reportsFullClient, PatchSharingInfoPayloadBuilder()
-            .configId(id).configType(Utils.REPORT_DEFINITION_TYPE)
-            .apply { revoke(mutableMapOf(Recipient.USERS to mutableSetOf(reportReadUser)), reportReadOnlyAccessLevel) }
-            .build())
+        patchSharingInfo(
+            reportsFullClient,
+            PatchSharingInfoPayloadBuilder()
+                .configId(id).configType(Utils.REPORT_DEFINITION_TYPE)
+                .apply { revoke(mutableMapOf(Recipient.USERS to mutableSetOf(reportReadUser)), reportReadOnlyAccessLevel) }
+                .build()
+        )
 
         step("wait for revocation to propagate")
         waitForRevokeNonVisibility(RestRequest.Method.GET.name, "$baseUri/definition/$id", null, reportsReadClient)
 
         validateErrorResponse(
             executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/definition/$id", "", RestStatus.FORBIDDEN.status),
-            RestStatus.FORBIDDEN.status, "security_exception"
+            RestStatus.FORBIDDEN.status,
+            "security_exception"
         )
 
         step("cleanup")
@@ -336,16 +375,26 @@ class ResourceSharingIT : PluginRestTestCase() {
         if (!isResourceSharingFeatureEnabled()) return
 
         step("create definition")
-        val defId = executeRequest(reportsFullClient, RestRequest.Method.POST.name, "$baseUri/definition",
-            constructReportDefinitionRequest(), RestStatus.OK.status).get("reportDefinitionId").asString
+        val defId = executeRequest(
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/definition",
+            constructReportDefinitionRequest(),
+            RestStatus.OK.status
+        ).get("reportDefinitionId").asString
         log.info("created definition $defId")
 
         step("wait for owner visibility of definition")
         awaitVisible(baseUri, "definition/$defId", reportsFullClient)
 
         step("generate instance")
-        val instanceId = executeRequest(reportsFullClient, RestRequest.Method.POST.name, "$baseUri/on_demand/$defId",
-            "{}", RestStatus.OK.status).get("reportInstance").asJsonObject.get("id").asString
+        val instanceId = executeRequest(
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/on_demand/$defId",
+            "{}",
+            RestStatus.OK.status
+        ).get("reportInstance").asJsonObject.get("id").asString
         log.info("created instance $instanceId")
 
         step("wait for owner visibility of instance")
@@ -354,7 +403,8 @@ class ResourceSharingIT : PluginRestTestCase() {
         step("read user cannot access instance before sharing")
         validateErrorResponse(
             executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/instance/$instanceId", "", RestStatus.FORBIDDEN.status),
-            RestStatus.FORBIDDEN.status, "security_exception"
+            RestStatus.FORBIDDEN.status,
+            "security_exception"
         )
 
         step("share instance with read user")
@@ -384,26 +434,44 @@ class ResourceSharingIT : PluginRestTestCase() {
         if (!isResourceSharingFeatureEnabled()) return
 
         step("create definition")
-        val defId = executeRequest(reportsFullClient, RestRequest.Method.POST.name, "$baseUri/definition",
-            constructReportDefinitionRequest(), RestStatus.OK.status).get("reportDefinitionId").asString
+        val defId = executeRequest(
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/definition",
+            constructReportDefinitionRequest(),
+            RestStatus.OK.status
+        ).get("reportDefinitionId").asString
         log.info("created definition $defId")
 
         step("wait for owner visibility of definition")
         awaitVisible(baseUri, "definition/$defId", reportsFullClient)
 
         step("generate 2 instances")
-        val instance1Id = executeRequest(reportsFullClient, RestRequest.Method.POST.name, "$baseUri/on_demand/$defId",
-            "{}", RestStatus.OK.status).get("reportInstance").asJsonObject.get("id").asString
-        val instance2Id = executeRequest(reportsFullClient, RestRequest.Method.POST.name, "$baseUri/on_demand/$defId",
-            "{}", RestStatus.OK.status).get("reportInstance").asJsonObject.get("id").asString
+        val instance1Id = executeRequest(
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/on_demand/$defId",
+            "{}",
+            RestStatus.OK.status
+        ).get("reportInstance").asJsonObject.get("id").asString
+        val instance2Id = executeRequest(
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/on_demand/$defId",
+            "{}",
+            RestStatus.OK.status
+        ).get("reportInstance").asJsonObject.get("id").asString
         log.info("created instances $instance1Id, $instance2Id")
 
         step("wait for owner to see both instances")
         awaitInstanceCount(baseUri, reportsFullClient, 2)
 
         step("read user sees 0 before sharing")
-        assertEquals(0, executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/instances", "", RestStatus.OK.status)
-            .get("totalHits").asInt)
+        assertEquals(
+            0,
+            executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/instances", "", RestStatus.OK.status)
+                .get("totalHits").asInt
+        )
 
         step("share instance1 with read user")
         shareConfig(reportsFullClient, shareWithUserPayload(instance1Id, Utils.REPORT_INSTANCE_TYPE, reportInstanceReadOnlyAccessLevel, reportReadUser))
@@ -433,8 +501,13 @@ class ResourceSharingIT : PluginRestTestCase() {
         if (!isResourceSharingFeatureEnabled()) return
 
         step("create definition")
-        val defId = executeRequest(reportsFullClient, RestRequest.Method.POST.name, "$baseUri/definition",
-            constructReportDefinitionRequest(name = "parent_hierarchy_def"), RestStatus.OK.status)
+        val defId = executeRequest(
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/definition",
+            constructReportDefinitionRequest(name = "parent_hierarchy_def"),
+            RestStatus.OK.status
+        )
             .get("reportDefinitionId").asString
         log.info("created definition $defId")
 
@@ -443,10 +516,20 @@ class ResourceSharingIT : PluginRestTestCase() {
         awaitVisible(baseUri, "definition/$defId", reportsFullClient)
 
         step("generate 2 instances")
-        val instance1Id = executeRequest(reportsFullClient, RestRequest.Method.POST.name, "$baseUri/on_demand/$defId",
-            "{}", RestStatus.OK.status).get("reportInstance").asJsonObject.get("id").asString
-        val instance2Id = executeRequest(reportsFullClient, RestRequest.Method.POST.name, "$baseUri/on_demand/$defId",
-            "{}", RestStatus.OK.status).get("reportInstance").asJsonObject.get("id").asString
+        val instance1Id = executeRequest(
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/on_demand/$defId",
+            "{}",
+            RestStatus.OK.status
+        ).get("reportInstance").asJsonObject.get("id").asString
+        val instance2Id = executeRequest(
+            reportsFullClient,
+            RestRequest.Method.POST.name,
+            "$baseUri/on_demand/$defId",
+            "{}",
+            RestStatus.OK.status
+        ).get("reportInstance").asJsonObject.get("id").asString
         log.info("created instances $instance1Id, $instance2Id")
 
         step("wait for owner to see both instances")
@@ -457,15 +540,38 @@ class ResourceSharingIT : PluginRestTestCase() {
         awaitVisible(baseUri, "instance/$instance2Id", reportsFullClient)
 
         step("read user sees 0 instances and gets 403 on direct GET before sharing")
-        assertEquals(0, executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/instances", "", RestStatus.OK.status)
-            .get("totalHits").asInt)
+        assertEquals(
+            0,
+            executeRequest(
+                reportsReadClient,
+                RestRequest.Method.GET.name,
+                "$baseUri/instances",
+                "",
+                RestStatus.OK.status
+            ).get("totalHits").asInt
+        )
         validateErrorResponse(
-            executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/instance/$instance1Id", "", RestStatus.FORBIDDEN.status),
-            RestStatus.FORBIDDEN.status, "security_exception"
+            executeRequest(
+                reportsReadClient,
+                RestRequest.Method.GET.name,
+                "$baseUri/instance/$instance1Id",
+                "",
+                RestStatus.FORBIDDEN.status
+            ),
+            RestStatus.FORBIDDEN.status,
+            "security_exception"
         )
 
         step("share DEFINITION (parent) with read user — instances are NOT directly shared")
-        shareConfig(reportsFullClient, shareWithUserPayload(defId, Utils.REPORT_DEFINITION_TYPE, reportReadOnlyAccessLevel, reportReadUser))
+        shareConfig(
+            reportsFullClient,
+            shareWithUserPayload(
+                defId,
+                Utils.REPORT_DEFINITION_TYPE,
+                reportReadOnlyAccessLevel,
+                reportReadUser
+            )
+        )
 
         // Wait for the definition's all_shared_principals to include the read user.
         // This is the prerequisite for the two-phase instance query to work:
@@ -485,12 +591,26 @@ class ResourceSharingIT : PluginRestTestCase() {
         step("assert read user can GET each instance individually")
         awaitVisible(baseUri, "instance/$instance1Id", reportsReadClient)
         awaitVisible(baseUri, "instance/$instance2Id", reportsReadClient)
-        assertEquals(instance1Id,
-            executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/instance/$instance1Id", "", RestStatus.OK.status)
-                .get("reportInstance").asJsonObject.get("id").asString)
-        assertEquals(instance2Id,
-            executeRequest(reportsReadClient, RestRequest.Method.GET.name, "$baseUri/instance/$instance2Id", "", RestStatus.OK.status)
-                .get("reportInstance").asJsonObject.get("id").asString)
+        assertEquals(
+            instance1Id,
+            executeRequest(
+                reportsReadClient,
+                RestRequest.Method.GET.name,
+                "$baseUri/instance/$instance1Id",
+                "",
+                RestStatus.OK.status
+            ).get("reportInstance").asJsonObject.get("id").asString
+        )
+        assertEquals(
+            instance2Id,
+            executeRequest(
+                reportsReadClient,
+                RestRequest.Method.GET.name,
+                "$baseUri/instance/$instance2Id",
+                "",
+                RestStatus.OK.status
+            ).get("reportInstance").asJsonObject.get("id").asString
+        )
 
         step("cleanup")
         executeRequest(reportsFullClient, RestRequest.Method.DELETE.name, "$baseUri/definition/$defId", "", RestStatus.OK.status)
