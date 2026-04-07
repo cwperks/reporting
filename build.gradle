@@ -28,7 +28,7 @@ buildscript {
         opensearch_group = "org.opensearch"
 
         isSnapshot = "true" == System.getProperty("build.snapshot", "true")
-        opensearch_version = System.getProperty("opensearch.version", "3.6.0-SNAPSHOT")
+        opensearch_version = System.getProperty("opensearch.version", "3.7.0-SNAPSHOT")
         buildVersionQualifier = System.getProperty("build.version_qualifier", "")
         // 2.0.0-rc1-SNAPSHOT -> 2.0.0.0-rc1-SNAPSHOT
         version_tokens = opensearch_version.tokenize('-')
@@ -249,7 +249,7 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-test:${kotlin_version}"
 
     testImplementation(
-            'org.assertj:assertj-core:3.16.1',
+            'org.assertj:assertj-core:3.27.7',
             'org.junit.jupiter:junit-jupiter-api:5.6.2'
     )
     testRuntimeOnly('org.junit.jupiter:junit-jupiter-engine:5.6.2')
