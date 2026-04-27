@@ -24,6 +24,8 @@ class ReportsSchedulerExtension : ResourceSharingExtension {
             object : ResourceProvider {
                 override fun resourceType(): String = Utils.REPORT_INSTANCE_TYPE
                 override fun resourceIndexName(): String = ReportInstancesIndex.REPORT_INSTANCES_INDEX_NAME
+                override fun parentType(): String = Utils.REPORT_DEFINITION_TYPE
+                override fun parentIdField(): String = "reportDefinitionDetails.id"
             }
         )
     }
