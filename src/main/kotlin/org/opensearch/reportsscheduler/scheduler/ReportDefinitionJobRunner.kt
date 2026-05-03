@@ -15,6 +15,7 @@ import org.opensearch.reportsscheduler.ReportsSchedulerPlugin.Companion.LOG_PREF
 import org.opensearch.reportsscheduler.index.ReportInstancesIndex
 import org.opensearch.reportsscheduler.model.ReportDefinitionDetails
 import org.opensearch.reportsscheduler.model.ReportInstance
+import org.opensearch.reportsscheduler.settings.PluginSettings
 import org.opensearch.reportsscheduler.util.logger
 import java.time.Instant
 
@@ -23,6 +24,12 @@ internal object ReportDefinitionJobRunner : ScheduledJobRunner {
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
 
     override fun runJob(job: ScheduledJobParameter, context: JobExecutionContext) {
+        if (PluginSettings.standbyModeEnabled) {
+            log.info(
+                "$LOG_PREFIX:standby mode is enabled, skipping scheduled report execution for job id ${context.jobId}"
+            )
+            return
+        }
         if (job !is ReportDefinitionDetails) {
             log.warn("$LOG_PREFIX:job is not of type ReportDefinitionDetails:${job.javaClass.name}")
             throw IllegalArgumentException("job is not of type ReportDefinitionDetails:${job.javaClass.name}")

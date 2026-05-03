@@ -35,6 +35,11 @@ internal object PluginSettings {
     private const val GENERAL_KEY_PREFIX = "$KEY_PREFIX.general"
 
     /**
+     * Standby mode suppresses local scheduled report execution for CCR/DR follower clusters.
+     */
+    internal const val STANDBY_MODE_KEY = "plugins.reports.standby_mode"
+
+    /**
      * Operation timeout for network operations.
      */
     private const val OPERATION_TIMEOUT_MS_KEY = "$GENERAL_KEY_PREFIX.operationTimeoutMs"
@@ -88,6 +93,12 @@ internal object PluginSettings {
     @Volatile
     var defaultItemsQueryCount: Int
 
+    /**
+     * Whether scheduled report execution should be suppressed on this cluster.
+     */
+    @Volatile
+    var standbyModeEnabled: Boolean
+
     private val log = LogManager.getLogger(javaClass)
     private val defaultSettings: Map<String, String>
 
@@ -106,6 +117,7 @@ internal object PluginSettings {
         operationTimeoutMs = (settings?.get(OPERATION_TIMEOUT_MS_KEY)?.toLong()) ?: DEFAULT_OPERATION_TIMEOUT_MS
         defaultItemsQueryCount = (settings?.get(DEFAULT_ITEMS_QUERY_COUNT_KEY)?.toInt())
             ?: DEFAULT_ITEMS_QUERY_COUNT_VALUE
+        standbyModeEnabled = false
 
         defaultSettings = mapOf(
             OPERATION_TIMEOUT_MS_KEY to operationTimeoutMs.toString(DECIMAL_RADIX),
@@ -144,6 +156,13 @@ internal object PluginSettings {
         Dynamic
     )
 
+    private val STANDBY_MODE: Setting<Boolean> = Setting.boolSetting(
+        STANDBY_MODE_KEY,
+        false,
+        NodeScope,
+        Dynamic
+    )
+
     /**
      * Returns true if RBAC is enabled, else false (default false).
      */
@@ -163,7 +182,8 @@ internal object PluginSettings {
     fun getAllSettings(): List<Setting<*>> {
         return listOf(
             OPERATION_TIMEOUT_MS,
-            DEFAULT_ITEMS_QUERY_COUNT
+            DEFAULT_ITEMS_QUERY_COUNT,
+            STANDBY_MODE
         )
     }
 
@@ -174,6 +194,7 @@ internal object PluginSettings {
     private fun updateSettingValuesFromLocal(clusterService: ClusterService) {
         operationTimeoutMs = OPERATION_TIMEOUT_MS.get(clusterService.settings)
         defaultItemsQueryCount = DEFAULT_ITEMS_QUERY_COUNT.get(clusterService.settings)
+        standbyModeEnabled = STANDBY_MODE.get(clusterService.settings)
     }
 
     /**
@@ -190,6 +211,11 @@ internal object PluginSettings {
         if (clusterDefaultItemsQueryCount != null) {
             log.debug("$LOG_PREFIX:$DEFAULT_ITEMS_QUERY_COUNT_KEY -autoUpdatedTo-> $clusterDefaultItemsQueryCount")
             defaultItemsQueryCount = clusterDefaultItemsQueryCount
+        }
+        val clusterStandbyMode = clusterService.clusterSettings.get(STANDBY_MODE)
+        if (clusterStandbyMode != null) {
+            log.debug("$LOG_PREFIX:$STANDBY_MODE_KEY -autoUpdatedTo-> $clusterStandbyMode")
+            standbyModeEnabled = clusterStandbyMode
         }
     }
 
@@ -211,6 +237,10 @@ internal object PluginSettings {
         clusterService.clusterSettings.addSettingsUpdateConsumer(DEFAULT_ITEMS_QUERY_COUNT) {
             defaultItemsQueryCount = it
             log.info("$LOG_PREFIX:$DEFAULT_ITEMS_QUERY_COUNT_KEY -updatedTo-> $it")
+        }
+        clusterService.clusterSettings.addSettingsUpdateConsumer(STANDBY_MODE) {
+            standbyModeEnabled = it
+            log.info("$LOG_PREFIX:$STANDBY_MODE_KEY -updatedTo-> $it")
         }
     }
 }
