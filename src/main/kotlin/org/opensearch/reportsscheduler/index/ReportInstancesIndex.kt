@@ -5,6 +5,7 @@
 
 package org.opensearch.reportsscheduler.index
 
+import org.apache.lucene.search.TotalHits
 import org.opensearch.ResourceAlreadyExistsException
 import org.opensearch.action.DocWriteResponse
 import org.opensearch.action.admin.indices.create.CreateIndexRequest
@@ -39,11 +40,13 @@ import java.util.concurrent.TimeUnit
 /**
  * Class for doing ES index operation to maintain report instances in cluster.
  */
+@Suppress("TooManyFunctions")
 internal object ReportInstancesIndex {
     private val log by logger(ReportInstancesIndex::class.java)
     const val REPORT_INSTANCES_INDEX_NAME = ".opendistro-reports-instances"
     private const val REPORT_INSTANCES_MAPPING_FILE_NAME = "report-instances-mapping.yml"
     private const val REPORT_INSTANCES_SETTINGS_FILE_NAME = "report-instances-settings.yml"
+    private const val MAX_SEARCH_RESULTS = 10_000
 
     private lateinit var client: Client
     private lateinit var clusterService: ClusterService
@@ -160,37 +163,136 @@ internal object ReportInstancesIndex {
         pluginClient: PluginClient?
     ): ReportInstanceSearchResults {
         createIndex()
+        val tenantQuery = QueryBuilders.termsQuery(TENANT_FIELD, tenant)
+
+        if (pluginClient != null && shouldUseResourceAuthz(Utils.REPORT_INSTANCE_TYPE)) {
+            // Resource-sharing path: resolve accessible instance IDs in the plugin layer.
+            //
+            // Step 1 — directly visible instances (DLS-filtered via pluginClient)
+            val directInstanceIds = searchInstanceIds(
+                QueryBuilders.boolQuery().filter(tenantQuery),
+                pluginClient
+            )
+
+            // Step 2 — accessible definition IDs (DLS-filtered via pluginClient)
+            val definitionIds = searchDefinitionIds(tenant, pluginClient)
+
+            // Step 3 — instances whose parent definition is accessible (admin client, no DLS)
+            val inheritedInstanceIds: Set<String> = if (definitionIds.isEmpty()) {
+                emptySet()
+            } else {
+                searchInstanceIdsByDefinitionIds(tenantQuery, definitionIds)
+            }
+
+            val allIds = directInstanceIds + inheritedInstanceIds
+            log.info(
+                "$LOG_PREFIX:getAllReportInstances directIds=${directInstanceIds.size}" +
+                    " definitionIds=${definitionIds.size} inheritedIds=${inheritedInstanceIds.size}" +
+                    " total=${allIds.size}"
+            )
+
+            if (allIds.isEmpty()) {
+                return ReportInstanceSearchResults(from.toLong(), 0L, TotalHits.Relation.EQUAL_TO, emptyList())
+            }
+
+            // Step 4 — fetch full docs for the union, with pagination applied
+            val idsQuery = QueryBuilders.idsQuery().apply {
+                allIds.forEach { addIds(it) }
+            }
+            val query = QueryBuilders.boolQuery()
+                .filter(tenantQuery)
+                .filter(idsQuery)
+            val sourceBuilder = SearchSourceBuilder()
+                .timeout(TimeValue(PluginSettings.operationTimeoutMs, TimeUnit.MILLISECONDS))
+                .sort(UPDATED_TIME_FIELD)
+                .size(maxItems)
+                .from(from)
+                .query(query)
+            val searchRequest = SearchRequest().indices(REPORT_INSTANCES_INDEX_NAME).source(sourceBuilder)
+            val response = client.search(searchRequest).actionGet(PluginSettings.operationTimeoutMs)
+            val result = ReportInstanceSearchResults(from.toLong(), response)
+            log.info(
+                "$LOG_PREFIX:getAllReportInstances from:$from maxItems:$maxItems" +
+                    " retCount:${result.objectList.size} totalCount:${result.totalHits}"
+            )
+            return result
+        }
+
+        // Legacy path (resource-sharing disabled)
         val sourceBuilder = SearchSourceBuilder()
             .timeout(TimeValue(PluginSettings.operationTimeoutMs, TimeUnit.MILLISECONDS))
             .sort(UPDATED_TIME_FIELD)
             .size(maxItems)
             .from(from)
-        val tenantQuery = QueryBuilders.termsQuery(TENANT_FIELD, tenant)
         if (access.isNotEmpty()) {
-            val accessQuery = QueryBuilders.termsQuery(ACCESS_LIST_FIELD, access)
-            val query = QueryBuilders.boolQuery()
-            query.filter(tenantQuery)
-            query.filter(accessQuery)
-            sourceBuilder.query(query)
+            sourceBuilder.query(
+                QueryBuilders.boolQuery()
+                    .filter(tenantQuery)
+                    .filter(QueryBuilders.termsQuery(ACCESS_LIST_FIELD, access))
+            )
         } else {
             sourceBuilder.query(tenantQuery)
         }
-        val searchRequest = SearchRequest()
-            .indices(REPORT_INSTANCES_INDEX_NAME)
-            .source(sourceBuilder)
-        val actionFuture =
-            if (pluginClient != null && shouldUseResourceAuthz(Utils.REPORT_INSTANCE_TYPE)) {
-                pluginClient.search(searchRequest)
-            } else {
-                client.search(searchRequest)
-            }
-        val response = actionFuture.actionGet(PluginSettings.operationTimeoutMs)
+        val searchRequest = SearchRequest().indices(REPORT_INSTANCES_INDEX_NAME).source(sourceBuilder)
+        val response = client.search(searchRequest).actionGet(PluginSettings.operationTimeoutMs)
         val result = ReportInstanceSearchResults(from.toLong(), response)
         log.info(
             "$LOG_PREFIX:getAllReportInstances from:$from, maxItems:$maxItems," +
                 " retCount:${result.objectList.size}, totalCount:${result.totalHits}"
         )
         return result
+    }
+
+    /**
+     * Returns the set of instance document IDs matching [query] via [pluginClient] (DLS-filtered).
+     * Fetches only `_id` — no source needed.
+     */
+    private fun searchInstanceIds(query: org.opensearch.index.query.QueryBuilder, pluginClient: PluginClient): Set<String> {
+        val sourceBuilder = SearchSourceBuilder()
+            .timeout(TimeValue(PluginSettings.operationTimeoutMs, TimeUnit.MILLISECONDS))
+            .size(MAX_SEARCH_RESULTS)
+            .fetchSource(false)
+            .query(query)
+        val request = SearchRequest().indices(REPORT_INSTANCES_INDEX_NAME).source(sourceBuilder)
+        val response = pluginClient.search(request).actionGet(PluginSettings.operationTimeoutMs)
+        return response.hits.hits.map { it.id }.toSet()
+    }
+
+    /**
+     * Returns the set of definition document IDs accessible to the current user via [pluginClient] (DLS-filtered).
+     */
+    private fun searchDefinitionIds(tenant: String, pluginClient: PluginClient): Set<String> {
+        val query = QueryBuilders.termsQuery(TENANT_FIELD, tenant)
+        val sourceBuilder = SearchSourceBuilder()
+            .timeout(TimeValue(PluginSettings.operationTimeoutMs, TimeUnit.MILLISECONDS))
+            .size(MAX_SEARCH_RESULTS)
+            .fetchSource(false)
+            .query(query)
+        val request = SearchRequest()
+            .indices(ReportDefinitionsIndex.REPORT_DEFINITIONS_INDEX_NAME)
+            .source(sourceBuilder)
+        val response = pluginClient.search(request).actionGet(PluginSettings.operationTimeoutMs)
+        return response.hits.hits.map { it.id }.toSet()
+    }
+
+    /**
+     * Returns instance IDs (via admin client, no DLS) whose `reportDefinitionDetails.id` is in [definitionIds].
+     */
+    private fun searchInstanceIdsByDefinitionIds(
+        tenantQuery: org.opensearch.index.query.QueryBuilder,
+        definitionIds: Set<String>
+    ): Set<String> {
+        val query = QueryBuilders.boolQuery()
+            .filter(tenantQuery)
+            .filter(QueryBuilders.termsQuery("reportDefinitionDetails.id", definitionIds.toList()))
+        val sourceBuilder = SearchSourceBuilder()
+            .timeout(TimeValue(PluginSettings.operationTimeoutMs, TimeUnit.MILLISECONDS))
+            .size(MAX_SEARCH_RESULTS)
+            .fetchSource(false)
+            .query(query)
+        val request = SearchRequest().indices(REPORT_INSTANCES_INDEX_NAME).source(sourceBuilder)
+        val response = client.search(request).actionGet(PluginSettings.operationTimeoutMs)
+        return response.hits.hits.map { it.id }.toSet()
     }
 
     /**
