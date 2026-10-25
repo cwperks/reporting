@@ -52,6 +52,7 @@ internal data class ReportDefinitionDetails(
 ) : ScheduledJobParameter {
     internal companion object {
         private val log by logger(ReportDefinitionDetails::class.java)
+        private const val LOCK_DURATION_SECONDS = 120L
 
         /**
          * Parse the data from parser and create ReportDefinitionDetails object
@@ -161,5 +162,9 @@ internal data class ReportDefinitionDetails(
                 (reportDefinition.trigger.schedule != null) &&
                 (trigger.triggerType == TriggerType.IntervalSchedule || trigger.triggerType == TriggerType.CronSchedule)
             )
+    }
+
+    override fun getLockDurationSeconds(): Long {
+        return LOCK_DURATION_SECONDS
     }
 }
