@@ -24,15 +24,19 @@ internal class GetReportInstanceAction @Inject constructor(
     actionFilters: ActionFilters,
     val xContentRegistry: NamedXContentRegistry
 ) : PluginBaseAction<GetReportInstanceRequest, GetReportInstanceResponse>(
-    NAME,
+    ACTION_TYPE,
     transportService,
     client,
     actionFilters,
     ::GetReportInstanceRequest
 ) {
     companion object {
-        private const val NAME = "cluster:admin/opendistro/reports/instance/get"
-        internal val ACTION_TYPE = ActionType(NAME, ::GetReportInstanceResponse)
+        private const val NAME = "report_instance:get"
+        internal val ACTION_TYPE = ActionType(
+            NAME,
+            ::GetReportInstanceResponse,
+            setOf("cluster:admin/opendistro/reports/instance/get")
+        )
     }
 
     /**
