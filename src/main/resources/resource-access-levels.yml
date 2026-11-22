@@ -5,7 +5,7 @@ resource_types:
       allowed_actions:
         - 'cluster:admin/opendistro/reports/definition/get'
         - 'cluster:admin/opendistro/reports/definition/list'
-        - 'cluster:admin/opendistro/reports/instance/get'
+        - 'report_instance:get'
         - 'cluster:admin/opendistro/reports/instance/list'
         - 'cluster:admin/opendistro/reports/menu/download'
 
@@ -18,7 +18,7 @@ resource_types:
     rd_full_access:
       allowed_actions:
         - 'cluster:admin/opendistro/reports/definition/*'
-        - 'cluster:admin/opendistro/reports/instance/get'
+        - 'report_instance:get'
         - 'cluster:admin/opendistro/reports/instance/list'
         - 'cluster:admin/opendistro/reports/menu/download'
         - 'cluster:admin/security/resource/share'
@@ -26,7 +26,7 @@ resource_types:
   report-instance:
     ri_read_only:
       allowed_actions:
-        - 'cluster:admin/opendistro/reports/instance/get'
+        - 'report_instance:get'
         - 'cluster:admin/opendistro/reports/instance/list'
         - 'cluster:admin/opendistro/reports/menu/download'
 

@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import org.opensearch.OpenSearchSecurityException
 import org.opensearch.OpenSearchStatusException
 import org.opensearch.action.ActionRequest
+import org.opensearch.action.ActionType
 import org.opensearch.action.support.ActionFilters
 import org.opensearch.action.support.HandledTransportAction
 import org.opensearch.common.util.concurrent.ThreadContext
@@ -31,13 +32,30 @@ import org.opensearch.transport.TransportService
 import org.opensearch.transport.client.Client
 import java.io.IOException
 
-abstract class PluginBaseAction<Request : ActionRequest, Response : ActionResponse>(
-    name: String,
-    transportService: TransportService,
-    val client: Client,
-    actionFilters: ActionFilters,
-    requestReader: Writeable.Reader<Request>
-) : HandledTransportAction<Request, Response>(name, transportService, actionFilters, requestReader) {
+abstract class PluginBaseAction<Request : ActionRequest, Response : ActionResponse> : HandledTransportAction<Request, Response> {
+    val client: Client
+
+    constructor(
+        name: String,
+        transportService: TransportService,
+        client: Client,
+        actionFilters: ActionFilters,
+        requestReader: Writeable.Reader<Request>
+    ) : super(name, transportService, actionFilters, requestReader) {
+        this.client = client
+    }
+
+    /** Registers the action's legacy names as aliases while executing under its canonical name. */
+    constructor(
+        action: ActionType<Response>,
+        transportService: TransportService,
+        client: Client,
+        actionFilters: ActionFilters,
+        requestReader: Writeable.Reader<Request>
+    ) : super(action, transportService, actionFilters, requestReader) {
+        this.client = client
+    }
+
     companion object {
         private val log by logger(PluginBaseAction::class.java)
         private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
